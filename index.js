@@ -61,10 +61,6 @@ function getStarted(message, reply, actions) {
       "content_type": "text",
       "title": "Stop Updates",
       "payload": "NOP"
-    }, {
-      "content_type": "text",
-      "title": "DEBUG",
-      "payload": "DEBUG"
     }]
   });
 }
