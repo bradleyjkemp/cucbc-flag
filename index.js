@@ -213,3 +213,8 @@ stream.on('data', function(json) {
     });
   }
 });
+
+// Prevent dyno from sleeping by making fake requests
+setInterval(function() {
+    http.get("https://cucbc-flag.herokuapp.com/_status");
+}, 300000); // every 5 minutes (300000)
