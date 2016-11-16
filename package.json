@@ -6,6 +6,7 @@
   "dependencies": {
     "ejs": "^2.5.2",
     "express": "^4.14.0",
+    "forever": "^0.15.3",
     "messenger-bot": "^2.4.0",
     "opbeat": "^3.20.0",
     "redis": "^2.6.3",

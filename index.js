@@ -19,20 +19,20 @@ var FLAGS = {
 
 var INVERSE_FLAGS = {
   
-}
+};
 
 let bot = new Bot({
   token: process.env.TOKEN,
   verify: process.env.VERIFY,
   app_secret: process.env.APP_SECRET
-})
+});
 
 bot.removeGetStartedButton();
 bot.removePersistentMenu();
 
 bot.on('error', (err) => {
-  console.error(err.message)
-})
+  console.error(err.message);
+});
 
 bot.setGetStartedButton(
   [{
@@ -130,12 +130,11 @@ bot.on('message', (payload, reply) => {
 });
 
 http.createServer(function (req, res) {
-  
   if (req.url === '/_status') {
     opbeat.setTransactionName("STATUS")
   };
   console.log("working");
-  bot.middleware()(req, res);
+  bot.middleware(req, res)
   console.log("finished");
 }).listen(process.env.PORT || 5000);
 
