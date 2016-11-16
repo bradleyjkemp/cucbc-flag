@@ -134,7 +134,7 @@ http.createServer(function (req, res) {
     opbeat.setTransactionName("STATUS")
   };
   console.log("working");
-  bot.middleware(req, res)
+  bot.middleware()(req, res)
   console.log("finished");
 }).listen(process.env.PORT || 5000);
 
