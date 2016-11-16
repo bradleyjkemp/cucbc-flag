@@ -129,9 +129,15 @@ bot.on('message', (payload, reply) => {
   });
 });
 
-http.createServer(bot.middleware()).listen(process.env.PORT || 5000);
-console.log('Echo bot server running at port 3000.');
-
+http.createServer(function (req, res) {
+  
+  if (req.url === '/_status') {
+    opbeat.setTransactionName("STATUS")
+  };
+  console.log("working");
+  bot.middleware()(req, res);
+  console.log("finished");
+}).listen(process.env.PORT || 5000);
 
 var Stream = require('user-stream');
 var stream = new Stream({
