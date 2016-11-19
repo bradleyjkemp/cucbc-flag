@@ -1,4 +1,4 @@
-'use strict'
+'use strict';
 var opbeat = require('opbeat').start();
 const http = require('http');
 const Bot = require('messenger-bot');
@@ -91,7 +91,7 @@ var payloads = {
   
   "NOP": function(message) {
     console.log("mark seeen");
-    bot.sendSenderAction(message.sender.id, "MARK_SEEN", (err, info) => {console.error(err); console.log(info)});
+    bot.sendSenderAction(message.sender.id, "MARK_SEEN", (err, info) => {console.error(err); console.log(info);});
   },
   
   "DEBUG" : function(message, reply, actions) {

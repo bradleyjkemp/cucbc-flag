@@ -13,7 +13,9 @@
     "redis": "^2.6.3",
     "user-stream": "^0.0.7"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "jshint": "^2.9.4"
+  },
   "scripts": {
     "test": "node tests/test.js"
   },
