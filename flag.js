@@ -15,6 +15,7 @@ class Flag {
     });
     
     this._twitterStream.on('data', this._handle.bind(this));
+    this._twitterStream.on('error', console.error);
     this._twitterStream.on('close', this.watch.bind(this));
     
     this._twitter = new Twitter({
