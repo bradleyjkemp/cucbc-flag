@@ -8,13 +8,14 @@
     "express": "^4.14.0",
     "forever": "^0.15.3",
     "messenger-bot": "^2.4.0",
+    "nbayes": "^3.0.0",
     "opbeat": "^3.20.0",
     "redis": "^2.6.3",
     "user-stream": "^0.0.7"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/test.js"
   },
   "repository": {
     "type": "git",
