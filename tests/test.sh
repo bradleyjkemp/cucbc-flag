@@ -1,2 +1,2 @@
-../node_modules/jshint/bin/jshint --config .jshintrc ../*.js
-node test.js
+./node_modules/jshint/bin/jshint --config ./tests/.jshintrc ./*.js
+node tests/test.js
