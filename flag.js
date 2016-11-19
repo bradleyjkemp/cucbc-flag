@@ -1,3 +1,4 @@
+'use strict';
 const Stream = require('user-stream');
 const Twitter = require('twitter');
 
