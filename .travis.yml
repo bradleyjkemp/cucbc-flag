@@ -1,0 +1,10 @@
+language: node_js
+node_js:
+- 4.1.1
+deploy:
+  provider: heroku
+  api_key:
+    secure: ikVARCmlaKDORXr2PlAjMye6MauJSAwTtqX0ivQEzBWVqtgRXERtY4eK9ROU8wmWBpwKEz3I+mYCP55+a06082kGDqMWaWcAoKQyLqy6fwW2yFllHtZ9VmrWsLDrSuA3G0jKEhrmM5U2uSIFn/A/jPewl+jZSlir329SSjUVaA9q32ipu93dMi/xYM5H7b99dC4ysebJg2CN2wWmK5s4PkhGl7b6sixzUA0Ne+ibjcEz+81UoVjfbMHJ416rNEKELdow/V+5YgIheC3tiOQcYH564zJbaV+pfaSYX5tr23qEVHCJGn3M9SyzD3QcXjDNok/KgG2zls2Femx+ob47Z1PZa6gyPw0U4YHIPMS0nzg763e9YNUQ4RPE73hSItDJurbbnmf6KVB93ajAiXmoPHP/vwUbzOmXHm/aGFpzuf0LH+pZP57HdVOA/pVvBSZS2gz0kFvmxt+6Ln8i0DrLby2VesBXFAxi1o/jBnJIGKbanPIIEJxFiYDLgRBiNcKEJDynghnXFJL50JisFkbM+DUjJvWjNRZKmqR8Kxolz+PPsyoQurhOhNvGuXZPeKico6QpCs8sQZaaZKx52lWm8eX0fAsD+NMbXLyMrB9L2JR8G1ZQdhs0K2gV1ass+lqkKS+iONm/HBLTrGAmi78TAmHh8zcRgV0T8QAFZnfrV20=
+  app: cucbc-flag
+  on:
+    repo: bradleyjkemp/cucbc-flag
