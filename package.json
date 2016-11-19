@@ -17,7 +17,7 @@
     "jshint": "^2.9.4"
   },
   "scripts": {
-    "test": "node tests/test.js"
+    "test": "tests/test.sh"
   },
   "repository": {
     "type": "git",
