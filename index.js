@@ -1,38 +1,30 @@
-'use strict'
-var opbeat = require('opbeat').start()
-const http = require('http')
-const Bot = require('messenger-bot')
-const redis = require('redis').createClient(process.env.REDIS_URL);
+'use strict';
+var opbeat = require('opbeat').start();
+const http = require('http');
+const Bot = require('messenger-bot');
+const redis = require('redis').createClient(process.env.REDIS_URL, {
+  prefix: process.env.TEST_PREFIX
+});
+console.log("Prefixing Redis keys with "+process.env.TEST_PREFIX);
+const Flag = require('./flag.js');
+let flagWatcher = new Flag(process.env, redis);
+flagWatcher.constuctor(process.env, redis);
 
-var OPTIONS = {
-  YELLOW_AND_RED: 0,
-  JUST_RED: 1,
-  DEBUG: 2
-};
-
-var FLAGS = {
-  GREEN : "Green",
-  YELLOW : "Yellow",
-  RED : "Red",
-  NOP : "Not operational"
-};
-
-var INVERSE_FLAGS = {
-  
-}
+//redis.set("FLAG", Flag.Colours.GREEN);
+redis.get("FLAG", (err, val) => console.log("Flag is "+val));
 
 let bot = new Bot({
   token: process.env.TOKEN,
   verify: process.env.VERIFY,
   app_secret: process.env.APP_SECRET
-})
+});
 
 bot.removeGetStartedButton();
 bot.removePersistentMenu();
 
 bot.on('error', (err) => {
-  console.error(err.message)
-})
+  console.error(err.message);
+});
 
 bot.setGetStartedButton(
   [{
@@ -43,46 +35,63 @@ bot.setGetStartedButton(
   }
 );
 
+bot.setPersistentMenu([
+  {
+    "type":"postback",
+    "title":"Update Subscription",
+    "payload":"UPDATE_SUBSCRIPTION"
+  }
+], (err) => console.error(err));
+
 function getStarted(message, reply, actions) {
   redis.srem("YELLOW_AND_RED", message.sender.id);
   redis.srem("JUST_RED", message.sender.id);
-  redis.srem("DEBUG", message.sender.id);
-  reply({
-    "text": "Which flags stop you rowing?",
-    "quick_replies": [{
-      "content_type": "text",
-      "title": "Yellow and Red",
-      "payload": "YELLOW_AND_RED"
-    }, {
-      "content_type": "text",
-      "title": "Just Red",
-      "payload": "JUST_RED"
-    }, {
-      "content_type": "text",
-      "title": "Stop Updates",
-      "payload": "NOP"
-    }]
-  });
+  redis.srem("YELLOW_SUBSCRIBERS", message.sender.id);
+  redis.srem("RED_SUBSCRIBERS", message.sender.id);
+
+  reply({ "attachment" :
+    {
+      "type": "template",
+      "payload": {
+        "template_type": "button",
+        "text": "Do you want to be told about yellow flags?",
+        "buttons": [{
+          "type": "postback",
+          "title": "Yes",
+          "payload": "YELLOW_AND_RED"
+        }, {
+          "type": "postback",
+          "title": "No",
+          "payload": "JUST_RED"
+        }]
+      }
+  }}, (err) => console.error(err));
 }
 
 var payloads = {
   'GET_STARTED' : getStarted,
   
   "YELLOW_AND_RED" : function(message, reply, actions) {
-    redis.get("FLAG", (err, flag) => reply({text: "Ok we'll tell you about all flags. The current flag is " + flag}));
-    redis.sadd("YELLOW_AND_RED", message.sender.id);
+    redis.get("FLAG", (err, flag) => {
+      if (err) throw err;
+      reply({text: "Ok we'll let you know when you can't row. The current flag is " + flag});
+    });
+    redis.sadd("YELLOW_SUBSCRIBERS", message.sender.id);
   },
   
   "JUST_RED" : function(message, reply, actions) {
-    redis.get("FLAG", (err, flag) => reply({text: "Ok we'll only tell you about red flags. The current flag is " + flag}));
-    redis.sadd("JUST_RED", message.sender.id);
+   redis.get("FLAG", (err, flag) => {
+      if (err) throw err;
+      reply({text: "Ok we'll let you know when you can't row. The current flag is " + flag});
+    });
+    redis.sadd("RED_SUBSCRIBERS", message.sender.id);
   },
   
   "UPDATE_SUBSCRIPTION" : getStarted,
   
   "NOP": function(message) {
     console.log("mark seeen");
-    bot.sendSenderAction(message.sender.id, "MARK_SEEN", (err, info) => {console.error(err); console.log(info)});
+    bot.sendSenderAction(message.sender.id, "MARK_SEEN", (err, info) => {console.error(err); console.log(info);});
   },
   
   "DEBUG" : function(message, reply, actions) {
@@ -103,6 +112,8 @@ bot.on('postback', (message, reply, actions) => {
 });
 
 bot.on('message', (payload, reply) => {
+  console.log("message received");
+  console.log(payload);
   if (payload.message.quick_reply) {
     if (payloads[payload.message.quick_reply.payload]) {
       opbeat.setTransactionName(payload.message.quick_reply.payload);
@@ -114,111 +125,102 @@ bot.on('message', (payload, reply) => {
   }
   
   opbeat.setTransactionName("MESSAGE");
-  
-  reply({
-    "text": "Do you want to update your subscription?",
-    "quick_replies": [{
-      "content_type": "text",
-      "title": "Yes",
-      "payload": "UPDATE_SUBSCRIPTION"
-    }, {
-      "content_type": "text",
-      "title": "No",
-      "payload": "NOP"
-    }]
-  });
+  console.log("replying");
+  reply({"attachment": {
+    "type": "template",
+    "payload": {
+      "template_type": "button",
+      "text": "Do you want to update your subscription?",
+      "buttons": [{
+        "type": "postback",
+        "title": "Yes",
+        "payload": "UPDATE_SUBSCRIPTION"
+      }, {
+        "type": "postback",
+        "title": "No",
+        "payload": "NOP"
+      }]
+    }
+  }}, (err) => console.log(err));
 });
 
 http.createServer(function (req, res) {
-  
   if (req.url === '/_status') {
-    opbeat.setTransactionName("STATUS")
-  };
-  console.log("working");
-  bot.middleware()(req, res);
-  console.log("finished");
-}).listen(process.env.PORT || 5000);
-
-var Stream = require('user-stream');
-var stream = new Stream({
-    consumer_key: process.env.CONSUMER_KEY,
-    consumer_secret: process.env.CONSUMER_SECRET,
-    access_token_key: process.env.ACCESS_TOKEN_KEY,
-    access_token_secret: process.env.ACCESS_TOKEN_SECRET
-});
- 
-//create stream 
-stream.stream();
-
-
-function extractColour(tweet) {
-  if(tweet.toLowerCase().indexOf("red") !== -1) return FLAGS.RED;
-  if(tweet.toLowerCase().indexOf("green") !== -1) return FLAGS.GREEN;
-  if(tweet.toLowerCase().indexOf("yellow") !== -1) return FLAGS.YELLOW;
-  return FLAGS.NOP;
-}
- 
-//listen stream data 
-stream.on('data', function(json) {
-  opbeat.setTransactionName("TWITTER_STREAM");
-  
-  if (!json.user || !json.text) {console.log("not message"); return};
-  console.log("Pushing messages");
-  
-  var newFlag = extractColour(json.text);
-  
-  if (json.user.screen_name === "cucbc" 
-      || json.user.screen_name === "cucbc_flag_test") {
-    //handle flag colours
-    redis.get("FLAG", (err, prevFlag) => {
-      if (err) throw err;
-      console.log(prevFlag +"->"+newFlag);
-      if (prevFlag === newFlag) {
-        return;
-      } else {
-        redis.set("FLAG", newFlag);
-      }
-      
-      if (newFlag === FLAGS.GREEN) {
-        redis.sunion("YELLOW_AND_RED", "JUST_RED", "DEBUG", (err, ids) => {
-          if (err) throw err;
-          ids.map((id) => bot.sendMessage(id, {text : "The flag is green again!"}, (err,info) => console.error(err)));
-        });
-      } else if (newFlag === FLAGS.RED) {
-        if (prevFlag == FLAGS.YELLOW) {
-          redis.sunion("JUST_RED", "DEBUG", (err, ids) => {
-            if (err) throw err;
-            ids.map((id) => bot.sendMessage(id, {text : "The flag is red :( How about an erg instead?"}, (err,info) => console.error(err)));
-          });
-        } else if (prevFlag == FLAGS.GREEN) {
-          redis.sunion("YELLOW_AND_RED", "JUST_RED", "DEBUG", (err, ids) => {
-            if (err) throw err;
-            ids.map((id) => bot.sendMessage(id, {text : "The flag is red :( How about an erg instead?"}, (err,info) => console.error(err)));
-          });
-        }
-      } else if (newFlag === FLAGS.YELLOW) {
-        console.log("yellow flag");
-        console.log(prevFlag);
-        console.log(prevFlag === FLAGS.RED ? "good" : "wtf!");
-        if (prevFlag == FLAGS.RED) { // double equals required
-          console.log("successfully entered loop");
-          redis.sunion("JUST_RED", "DEBUG", (err, ids) => {
-            if (err) throw err;
-            console.log(ids);
-            ids.map((id) => bot.sendMessage(id, {text : "The flag is yellow again. Be safe out there :/"}, (err,info) => console.error(err)));
-          });
-        } else if (prevFlag == FLAGS.GREEN) { // double equals required
-          console.log("entered wrong branch");
-          redis.sunion("YELLOW_AND_RED", "DEBUG", (err, ids) => {
-            if (err) throw err;
-            ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned yellow :("}, (err,info) => console.error(err)));
-          });
-        }
-        console.log("passed through conditional");
-      }
-    });
+    opbeat.setTransactionName("STATUS");
   }
-});
+  bot.middleware()(req, res);
+}).listen(process.env.PORT || 5000);
+console.log("Listening on "+(process.env.PORT || 5000));
+
+var transitionFunctions = {};
+
+function NOPMessage () {
+  redis.sunion("YELLOW_SUBSCRIBERS", "RED_SUBSCRIBERS", (err, ids) => {
+    if (err) throw err;
+    
+    ids.map((id) => bot.sendMessage(id, {text : "The flag is no longer in operation"}, (err,info) => console.error(err)));
+  });
+}
+
+function GREENMessage () {
+  redis.sunion("YELLOW_SUBSCRIBERS", "RED_SUBSCRIBERS", (err, ids) => {
+    if (err) throw err;
+    
+    ids.map((id) => bot.sendMessage(id, {text : "The flag is green again!"}, (err,info) => console.error(err)));
+  });
+}
+
+transitionFunctions[Flag.Colours.GREEN] = {};
+transitionFunctions[Flag.Colours.YELLOW] = {};
+transitionFunctions[Flag.Colours.RED] = {};
+transitionFunctions[Flag.Colours.NOP] = {};
+
+transitionFunctions[Flag.Colours.GREEN][Flag.Colours.YELLOW] = () => {
+  console.log("test");
+  redis.sunion("YELLOW_AND_RED", "YELLOW_SUBSCRIBERS", (err, ids) => {
+    if (err) throw err;
+    console.log(ids);
+    ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned yellow :("}, (err,info) => console.error(err)));
+  });
+};
+
+transitionFunctions[Flag.Colours.GREEN][Flag.Colours.RED] = () => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
+    if (err) throw err;
+    
+    ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned red :("}, (err,info) => console.error(err)));
+  });
+};
+
+transitionFunctions[Flag.Colours.GREEN][Flag.Colours.NOP] = NOPMessage;
+
+transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.GREEN] = GREENMessage;
+
+transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.RED] = () => {
+  redis.sunion("RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
+    if (err) throw err;
+    
+    ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned red :("}, (err,info) => console.error(err)));
+  });
+};
+
+transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.NOP] = NOPMessage;
+
+transitionFunctions[Flag.Colours.RED][Flag.Colours.GREEN] = GREENMessage;
+
+transitionFunctions[Flag.Colours.RED][Flag.Colours.YELLOW] = () => {
+  redis.sunion("RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
+    if (err) throw err;
+    
+    ids.map((id) => bot.sendMessage(id, {text : "The flag has turned yellow. Stay safe out there :)"}, (err,info) => console.error(err)));
+  });
+};
+
+transitionFunctions[Flag.Colours.RED][Flag.Colours.NOP] = NOPMessage;
+
+flagWatcher.onTransition(transitionFunctions);
+flagWatcher.watch(process.env.SCREEN_NAME || "cucbc_flag_test");
+console.log("Watching "+(process.env.SCREEN_NAME || "cucbc_flag_test"));
 
 // Prevent dyno from sleeping by making fake requests
 setInterval(function() {
