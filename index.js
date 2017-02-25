@@ -1,16 +1,25 @@
 'use strict';
-var opbeat = require('opbeat').start();
+var opbeat;
+if (!process.env.TEST_PREFIX) {
+  opbeat = require('opbeat').start();
+} else {
+  opbeat = {setTransactionName: ()=>{}};
+}
 const http = require('http');
 const Bot = require('messenger-bot');
 const redis = require('redis').createClient(process.env.REDIS_URL, {
   prefix: process.env.TEST_PREFIX
 });
+
 console.log("Prefixing Redis keys with "+process.env.TEST_PREFIX);
 const Flag = require('./flag.js');
 let flagWatcher = new Flag(process.env, redis);
 flagWatcher.constuctor(process.env, redis);
 
-//redis.set("FLAG", Flag.Colours.GREEN);
+const MessageTypes = require('./message-types.js');
+const conversation = require('./conversation.js');
+const responses = require('./responses.js');
+
 redis.get("FLAG", (err, val) => console.log("Flag is "+val));
 
 let bot = new Bot({
@@ -37,9 +46,14 @@ bot.setGetStartedButton(
 
 bot.setPersistentMenu([
   {
-    "type":"postback",
-    "title":"Update Subscription",
-    "payload":"UPDATE_SUBSCRIPTION"
+    "type": "postback",
+    "title": "Update Subscription",
+    "payload": "UPDATE_SUBSCRIPTION"
+  },
+  {
+    "type": "postback",
+    "title": "Current Flag",
+    "payload": "FLAG_QUERY"
   }
 ], (err) => console.error(err));
 
@@ -54,7 +68,7 @@ function getStarted(message, reply, actions) {
       "type": "template",
       "payload": {
         "template_type": "button",
-        "text": "Do you want to be told about yellow flags?",
+        "text": "Do you want to be told about flag changes?",
         "buttons": [{
           "type": "postback",
           "title": "Yes",
@@ -62,16 +76,16 @@ function getStarted(message, reply, actions) {
         }, {
           "type": "postback",
           "title": "No",
-          "payload": "JUST_RED"
+          "payload": "UNSUBSCRIBE"
         }]
       }
   }}, (err) => console.error(err));
 }
 
 var payloads = {
-  'GET_STARTED' : getStarted,
+  'GET_STARTED': getStarted,
   
-  "YELLOW_AND_RED" : function(message, reply, actions) {
+  "YELLOW_AND_RED": function(message, reply, actions) {
     redis.get("FLAG", (err, flag) => {
       if (err) throw err;
       reply({text: "Ok we'll let you know when you can't row. The current flag is " + flag});
@@ -79,7 +93,7 @@ var payloads = {
     redis.sadd("YELLOW_SUBSCRIBERS", message.sender.id);
   },
   
-  "JUST_RED" : function(message, reply, actions) {
+  "JUST_RED": function(message, reply, actions) {
    redis.get("FLAG", (err, flag) => {
       if (err) throw err;
       reply({text: "Ok we'll let you know when you can't row. The current flag is " + flag});
@@ -87,7 +101,16 @@ var payloads = {
     redis.sadd("RED_SUBSCRIBERS", message.sender.id);
   },
   
-  "UPDATE_SUBSCRIPTION" : getStarted,
+  "UPDATE_SUBSCRIPTION": getStarted,
+  
+  "FLAG_QUERY": (message, reply, actions) => {
+    console.log(message);
+    respond(MessageTypes.FLAG_QUERY, message.sender.id, reply);
+  },
+  
+  "UNSUBSCRIBE": (message, reply, actions) => {
+    reply({text: "Ok, you're unsubscribed."});
+  },
   
   "NOP": function(message) {
     console.log("mark seeen");
@@ -103,6 +126,7 @@ var payloads = {
 
 
 bot.on('postback', (message, reply, actions) => {
+  console.log("postback recieved");
   opbeat.setTransactionName(message.postback.payload);
   if (payloads[message.postback.payload]) {
     payloads[message.postback.payload](message, reply, actions);
@@ -110,6 +134,21 @@ bot.on('postback', (message, reply, actions) => {
     console.error(message.postback.payload + " not known");
   }
 });
+
+function respond(type, senderId, reply) {
+  console.log(reply);
+  redis.sismember("RED_SUBSCRIBERS", senderId, (err, red) => {
+    if (err) throw err;
+    var subscriberType = red ? "RED_SUBSCRIBERS" : "YELLOW_SUBSCRIBERS";
+    
+    redis.get("FLAG", (err, flag) => {
+      if (err) throw err;
+      
+      var sentiment = responses.Sentiments[subscriberType][flag];
+      responses.respond(reply, type, flag, sentiment);
+    });
+  });
+}
 
 bot.on('message', (payload, reply) => {
   console.log("message received");
@@ -125,23 +164,9 @@ bot.on('message', (payload, reply) => {
   }
   
   opbeat.setTransactionName("MESSAGE");
-  console.log("replying");
-  reply({"attachment": {
-    "type": "template",
-    "payload": {
-      "template_type": "button",
-      "text": "Do you want to update your subscription?",
-      "buttons": [{
-        "type": "postback",
-        "title": "Yes",
-        "payload": "UPDATE_SUBSCRIPTION"
-      }, {
-        "type": "postback",
-        "title": "No",
-        "payload": "NOP"
-      }]
-    }
-  }}, (err) => console.log(err));
+  
+  var type = conversation.classify(payload.message.string);
+  respond(type, payload.sender.id, reply);
 });
 
 http.createServer(function (req, res) {
@@ -155,7 +180,7 @@ console.log("Listening on "+(process.env.PORT || 5000));
 var transitionFunctions = {};
 
 function NOPMessage () {
-  redis.sunion("YELLOW_SUBSCRIBERS", "RED_SUBSCRIBERS", (err, ids) => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     
     ids.map((id) => bot.sendMessage(id, {text : "The flag is no longer in operation"}, (err,info) => console.error(err)));
@@ -163,28 +188,28 @@ function NOPMessage () {
 }
 
 function GREENMessage () {
-  redis.sunion("YELLOW_SUBSCRIBERS", "RED_SUBSCRIBERS", (err, ids) => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     
     ids.map((id) => bot.sendMessage(id, {text : "The flag is green again!"}, (err,info) => console.error(err)));
   });
 }
 
-transitionFunctions[Flag.Colours.GREEN] = {};
-transitionFunctions[Flag.Colours.YELLOW] = {};
-transitionFunctions[Flag.Colours.RED] = {};
-transitionFunctions[Flag.Colours.NOP] = {};
+transitionFunctions[Flag.Colors.GREEN] = {};
+transitionFunctions[Flag.Colors.YELLOW] = {};
+transitionFunctions[Flag.Colors.RED] = {};
+transitionFunctions[Flag.Colors.NOP] = {};
 
-transitionFunctions[Flag.Colours.GREEN][Flag.Colours.YELLOW] = () => {
+transitionFunctions[Flag.Colors.GREEN][Flag.Colors.YELLOW] = () => {
   console.log("test");
-  redis.sunion("YELLOW_AND_RED", "YELLOW_SUBSCRIBERS", (err, ids) => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     console.log(ids);
     ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned yellow :("}, (err,info) => console.error(err)));
   });
 };
 
-transitionFunctions[Flag.Colours.GREEN][Flag.Colours.RED] = () => {
+transitionFunctions[Flag.Colors.GREEN][Flag.Colors.RED] = () => {
   redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     
@@ -192,31 +217,31 @@ transitionFunctions[Flag.Colours.GREEN][Flag.Colours.RED] = () => {
   });
 };
 
-transitionFunctions[Flag.Colours.GREEN][Flag.Colours.NOP] = NOPMessage;
+transitionFunctions[Flag.Colors.GREEN][Flag.Colors.NOP] = NOPMessage;
 
-transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.GREEN] = GREENMessage;
+transitionFunctions[Flag.Colors.YELLOW][Flag.Colors.GREEN] = GREENMessage;
 
-transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.RED] = () => {
-  redis.sunion("RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
+transitionFunctions[Flag.Colors.YELLOW][Flag.Colors.RED] = () => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     
     ids.map((id) => bot.sendMessage(id, {text : "Sorry, the flag has turned red :("}, (err,info) => console.error(err)));
   });
 };
 
-transitionFunctions[Flag.Colours.YELLOW][Flag.Colours.NOP] = NOPMessage;
+transitionFunctions[Flag.Colors.YELLOW][Flag.Colors.NOP] = NOPMessage;
 
-transitionFunctions[Flag.Colours.RED][Flag.Colours.GREEN] = GREENMessage;
+transitionFunctions[Flag.Colors.RED][Flag.Colors.GREEN] = GREENMessage;
 
-transitionFunctions[Flag.Colours.RED][Flag.Colours.YELLOW] = () => {
-  redis.sunion("RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
+transitionFunctions[Flag.Colors.RED][Flag.Colors.YELLOW] = () => {
+  redis.sunion("YELLOW_SUBSCRIBERS", "YELLOW_AND_RED", "RED_SUBSCRIBERS", "JUST_RED", (err, ids) => {
     if (err) throw err;
     
-    ids.map((id) => bot.sendMessage(id, {text : "The flag has turned yellow. Stay safe out there :)"}, (err,info) => console.error(err)));
+    ids.map((id) => bot.sendMessage(id, {text : "The flag has turned yellow. Getting slightly better..."}, (err,info) => console.error(err)));
   });
 };
 
-transitionFunctions[Flag.Colours.RED][Flag.Colours.NOP] = NOPMessage;
+transitionFunctions[Flag.Colors.RED][Flag.Colors.NOP] = NOPMessage;
 
 flagWatcher.onTransition(transitionFunctions);
 flagWatcher.watch(process.env.SCREEN_NAME || "cucbc_flag_test");
