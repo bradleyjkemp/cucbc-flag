@@ -86,10 +86,10 @@ class Flag {
   }
   
   _extractColour (tweetText) {
-    if(tweetText.toLowerCase().indexOf("red") !== -1) return Flag.Colours.RED;
-    if(tweetText.toLowerCase().indexOf("green") !== -1) return Flag.Colours.GREEN;
-    if(tweetText.toLowerCase().indexOf("yellow") !== -1) return Flag.Colours.YELLOW;
-    return Flag.Colours.NOP;
+    if(tweetText.toLowerCase().indexOf("red") !== -1) return Flag.Colors.RED;
+    if(tweetText.toLowerCase().indexOf("green") !== -1) return Flag.Colors.GREEN;
+    if(tweetText.toLowerCase().indexOf("yellow") !== -1) return Flag.Colors.YELLOW;
+    return Flag.Colors.NOP;
   }
   
   _forceTwitterCheck () {
@@ -105,7 +105,7 @@ class Flag {
   }
 }
 
-Flag.Colours = {
+Flag.Colors = {
     "RED": "Red",
     "GREEN": "Green",
     "YELLOW": "Yellow",
