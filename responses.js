@@ -44,10 +44,7 @@ Responses.Sentiments["YELLOW_SUBSCRIBERS"] = {};
 Responses.Sentiments["YELLOW_SUBSCRIBERS"][Flag.Colors.GREEN] = Types.POSITIVE;
 Responses.Sentiments["YELLOW_SUBSCRIBERS"][Flag.Colors.YELLOW] = Types.NEGATIVE;
 Responses.Sentiments["YELLOW_SUBSCRIBERS"][Flag.Colors.RED] = Types.NEGATIVE;
-Responses.Sentiments["RED_SUBSCRIBERS"] = {};
-Responses.Sentiments["RED_SUBSCRIBERS"][Flag.Colors.GREEN] = Types.POSITIVE;
-Responses.Sentiments["RED_SUBSCRIBERS"][Flag.Colors.YELLOW] = Types.POSITIVE;
-Responses.Sentiments["RED_SUBSCRIBERS"][Flag.Colors.RED] = Types.NEGATIVE;
+Responses.Sentiments["RED_SUBSCRIBERS"] = Responses.Sentiments["YELLOW_SUBSCRIBERS"];
 
 
 Responses.Types[Types.GREETING] = (reply) => {
